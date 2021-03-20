@@ -306,14 +306,14 @@ asm("  .section .version\n"
 /* generate any entry or exit code itself. */
 int main(void) __attribute__ ((OS_main)) __attribute__ ((section (".init9")));
 //int main(void) __attribute__ ((naked)) __attribute__ ((section (".init9")));
-void putch(char);
-uint8_t getch(void);
+void __attribute__((noinline)) putch(char);
+uint8_t __attribute__((noinline)) getch(void);
 static inline void getNch(uint8_t); /* "static inline" is a compiler hint to reduce code size */
-void verifySpace();
+void __attribute__((noinline)) verifySpace();
 static inline void flash_led(uint8_t);
 uint8_t getLen();
 static inline void watchdogReset();
-void watchdogConfig(uint8_t x);
+void __attribute__((noinline)) watchdogConfig(uint8_t x);
 #ifdef SOFT_UART
 void uartDelay() __attribute__ ((naked));
 #endif
