@@ -365,10 +365,15 @@ void appStart(uint8_t rstFlags) __attribute__ ((naked));
 /* This allows us to drop the zero init code, saving us memory */
 #define buff    ((uint8_t*)(RAMSTART))
 #ifdef VIRTUAL_BOOT_PARTITION
-#define rstVect0 (*(volatile uint16_t*)(RAMSTART + SPM_PAGESIZE + 4))
-#define rstVect1 (*(volatile uint16_t*)(RAMSTART + SPM_PAGESIZE + 6))
-#define wdtVect0 (*(volatile uint16_t*)(RAMSTART + SPM_PAGESIZE + 8))
-#define wdtVect1 (*(volatile uint16_t*)(RAMSTART + SPM_PAGESIZE + 10))
+#define rstVect0_sav (*(uint8_t*)(RAMSTART+SPM_PAGESIZE*2+4))
+#define rstVect1_sav (*(uint8_t*)(RAMSTART+SPM_PAGESIZE*2+5))
+#define wdtVect0_sav (*(uint8_t*)(RAMSTART+SPM_PAGESIZE*2+6))
+#define wdtVect1_sav (*(uint8_t*)(RAMSTART+SPM_PAGESIZE*2+7))
+// AVRs with more than 8k of flash have 4-byte vectors, and use jmp.
+#define rstVect0 2
+#define rstVect1 3
+#define wdtVect0 (WDT_vect_num*4+2)
+#define wdtVect1 (WDT_vect_num*4+3)
 #endif
 
 /*
@@ -618,26 +623,23 @@ int main(void) {
 	  }
       } else {
 #ifdef VIRTUAL_BOOT_PARTITION
-	if ((uint16_t)(void*)address == 0) {
-	  // This is the reset vector page. We need to live-patch the code so the
-	  // bootloader runs.
+	if (address == 0) {
+	  // This is the reset vector page. We need to live-patch the
+	  // code so the bootloader runs first.
 	  //
-	  // Move RESET vector to WDT vector
-	  rstVect0 = buff[0] | (buff[1] << 8);
-	  rstVect1 = buff[2] | (buff[3] << 8);
-	  wdtVect0 = buff[24] | (buff[25] << 8);
-	  wdtVect1 = buff[26] | (buff[27] << 8);
+	  // Save jmp targets (for "Verify")		
+	  rstVect0_sav = buff[rstVect0];
+	  rstVect1_sav = buff[rstVect1];
+	  wdtVect0_sav = buff[wdtVect0];
+	  wdtVect1_sav = buff[wdtVect1];
 
-	  buff[24] = buff[0];
-	  buff[25] = buff[1];
-	  buff[26] = buff[2];
-	  buff[27] = buff[3];
+	  // Move RESET jmp target to WDT vector
+	  buff[wdtVect0] = rstVect0_sav;
+	  buff[wdtVect1] = rstVect1_sav;
 	
 	  // Add jump to bootloader at RESET vector
-	  buff[0] = 0x0c;
-	  buff[1] = 0x94; // jmp 
-	  buff[2] = 0x00;
-	  buff[3] = 0x3a; // 0x7400 (0x3a00) 
+	  buff[rstVect0] = ((uint16_t)main) & 0xFF;
+	  buff[rstVect1] = ((uint16_t)main) >> 8;
 	}
 #endif
       	// Write from programming buffer
@@ -677,14 +679,10 @@ int main(void) {
       	do {
 #ifdef VIRTUAL_BOOT_PARTITION
 	   // Undo vector patch in bottom page so verify passes
-	   if (address == 0)		ch = rstVect0 & 0xff;
-	   else if (address == 1)	ch = rstVect0 >> 8;
-	   else if (address == 2)	ch = rstVect1 & 0xff;
-	   else if (address == 3)	ch = rstVect1 >> 8;
-	   else if (address == 24)	ch = wdtVect0 & 0xff;
-	   else if (address == 25)	ch = wdtVect0 >> 8;
-	   else if (address == 26)	ch = wdtVect1 & 0xff;
-	   else if (address == 27)	ch = wdtVect1 >> 8;
+	   if (address == rstVect0) ch = rstVect0_sav;
+	   else if (address == rstVect1) ch = rstVect1_sav;
+	   else if (address == wdtVect0) ch = wdtVect0_sav;
+	   else if (address == wdtVect1) ch = wdtVect1_sav;
 	   else {
 	   // read a Flash byte and increment the address
 	#if defined(RAMPZ)
