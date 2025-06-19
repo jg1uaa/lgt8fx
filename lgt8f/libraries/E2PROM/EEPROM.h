@@ -408,6 +408,8 @@ struct EEPROMClass
 		return t;
 	}
 
+	int size() { return lgt_eeprom_size(false); }
+
 	uint16_t change_size( uint8_t number_of_1KB_pages ) 
 	{ 
 		lgt_eeprom_size( number_of_1KB_pages ); 
